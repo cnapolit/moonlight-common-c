@@ -3,13 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// Retain backwards compatibility with older USE_MBEDTLS
-#if defined(USE_MBEDTLS) && !defined(USE_PSA_CRYPTO)
-#define USE_PSA_CRYPTO
-#endif
-
-#ifdef USE_PSA_CRYPTO
-#include <psa/crypto.h>
+#ifdef USE_MBEDTLS
+#include <mbedtls/cipher.h>
 #else
 // Hide the real OpenSSL definition from other code
 typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
@@ -25,11 +20,9 @@ typedef struct _REPLAY_WINDOW {
 } REPLAY_WINDOW, *PREPLAY_WINDOW;
 
 typedef struct _PLT_CRYPTO_CONTEXT {
-#ifdef USE_PSA_CRYPTO
-    psa_key_id_t key;
-    psa_cipher_operation_t cipherOp;
+#ifdef USE_MBEDTLS
+    mbedtls_cipher_context_t ctx;
     bool initialized;
-    bool cipherOpActive;
 #else
     EVP_CIPHER_CTX* ctx;
     bool initialized;
