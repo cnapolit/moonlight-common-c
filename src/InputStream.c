@@ -1,5 +1,6 @@
 #include "Limelight-internal.h"
 #include "ControllerSpeakerPcm.h"
+#include "SteamController.h"
 
 static SOCKET inputSock = INVALID_SOCKET;
 static unsigned char currentAesIv[16];
@@ -1552,6 +1553,12 @@ static int sendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeG
     if (type == LI_CTYPE_PS && speakerOwner == 0) {
         capabilities &= ~LI_CCAP_PS_SPEAKER_PCM;
     }
+    if (SteamHapticCallback == NULL) {
+        capabilities &= ~LI_CCAP_STEAM_HAPTIC;
+    }
+    if (SteamSettingsCallback == NULL) {
+        capabilities &= ~LI_CCAP_STEAM_SETTINGS;
+    }
 
     // The arrival event is only supported by Sunshine
     if (IS_SUNSHINE()) {
@@ -1756,6 +1763,46 @@ int LiSendControllerBatteryEvent(uint8_t controllerNumber, uint8_t batteryState,
     holder->packet.controllerBattery.batteryState = batteryState;
     holder->packet.controllerBattery.batteryPercentage = batteryPercentage;
     memset(holder->packet.controllerBattery.zero, 0, sizeof(holder->packet.controllerBattery.zero));
+
+    err = LbqOfferQueueItem(&packetQueue, holder, &holder->entry);
+    if (err != LBQ_SUCCESS) {
+        LC_ASSERT(err == LBQ_BOUND_EXCEEDED);
+        Limelog("Input queue reached maximum size limit\n");
+        freePacketHolder(holder);
+    }
+
+    return err;
+}
+
+int LiSendSteamControllerAttributesEvent(uint8_t controllerNumber, const LI_STEAM_CONTROLLER_ATTRIBUTES* attributes) {
+    PPACKET_HOLDER holder;
+    int err;
+
+    if (!initialized) {
+        return -2;
+    }
+
+    if (attributes == NULL) {
+        return -1;
+    }
+
+    // This is a protocol extension only supported with Sunshine-derived hosts
+    if (!IS_SUNSHINE()) {
+        return LI_ERR_UNSUPPORTED;
+    }
+
+    // Sunshine supports up to 16 controllers
+    controllerNumber %= MAX_GAMEPADS;
+
+    holder = allocatePacketHolder(0);
+    if (holder == NULL) {
+        return -1;
+    }
+
+    // Same channel as the arrival event, reliable: the host sees the arrival first
+    holder->channelId = CTRL_CHANNEL_GAMEPAD_BASE + controllerNumber;
+    holder->enetPacketFlags = ENET_PACKET_FLAG_RELIABLE;
+    MlSteamBuildAttributes((uint8_t*)&holder->packet, sizeof(holder->packet), controllerNumber, attributes);
 
     err = LbqOfferQueueItem(&packetQueue, holder, &holder->entry);
     if (err != LBQ_SUCCESS) {

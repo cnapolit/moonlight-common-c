@@ -1,6 +1,7 @@
 #include "Limelight-internal.h"
 #include "ControllerHaptics.h"
 #include "ControllerSpeakerPcm.h"
+#include "SteamController.h"
 
 // This is a private header, but it just contains some time macros
 #include <enet/time.h>
@@ -1501,6 +1502,14 @@ static void controlReceiveThreadFunc(void* context) {
             else if (ctlHdr->type == ML_SPEAKER_PCM_PACKET_TYPE && ControllerSpeakerPcmCallback != NULL) {
                 MlSpeakerPcmDispatch((const uint8_t*)(ctlHdr + 1), (size_t)packetLength - sizeof(*ctlHdr),
                                      ControllerSpeakerPcmCallback);
+            }
+            else if (ctlHdr->type == ML_STEAM_HAPTIC_PACKET_TYPE && SteamHapticCallback != NULL) {
+                MlSteamHapticDispatch((const uint8_t*)(ctlHdr + 1), (size_t)packetLength - sizeof(*ctlHdr),
+                                      SteamHapticCallback);
+            }
+            else if (ctlHdr->type == ML_STEAM_SETTINGS_PACKET_TYPE && SteamSettingsCallback != NULL) {
+                MlSteamSettingsDispatch((const uint8_t*)(ctlHdr + 1), (size_t)packetLength - sizeof(*ctlHdr),
+                                        SteamSettingsCallback);
             }
             // Process client callbacks in a separate thread
             else if (needsAsyncCallback(ctlHdr->type)) {
