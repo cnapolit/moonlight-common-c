@@ -483,6 +483,18 @@ typedef void(*ConnListenerSetAdaptiveTriggers)(uint16_t controllerNumber, uint8_
 // This callback is invoked to set a controller's RGB LED (if present).
 typedef void(*ConnListenerSetControllerLED)(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t b);
 
+// Vibepollo extension: haptic waveform PCM for a controller's actuators (DualSense voice-coil haptics).
+// `pcm` holds `frames` stereo frames of 48 kHz S16LE samples (left/right actuator, interleaved, 4 bytes
+// per frame, at most 240 frames). `sequence` increases per message so gaps can be detected.
+//
+// Setting this callback makes the client advertise haptics PCM support to the host; the host then sends
+// PCM for controllers whose arrival event carries LI_CCAP_HAPTICS_PCM (the capability is stripped from
+// arrival events while this callback is NULL). Stock hosts never send these messages.
+//
+// Invoked on the control stream receive thread: it must not block. `pcm` is only valid for the duration
+// of the callback, so copy it before returning.
+typedef void(*ConnListenerControllerHaptics)(uint16_t controllerNumber, uint32_t sequence, const uint8_t* pcm, uint16_t frames);
+
 typedef struct _CONNECTION_LISTENER_CALLBACKS {
     ConnListenerStageStarting stageStarting;
     ConnListenerStageComplete stageComplete;
@@ -497,6 +509,10 @@ typedef struct _CONNECTION_LISTENER_CALLBACKS {
     ConnListenerSetMotionEventState setMotionEventState;
     ConnListenerSetControllerLED setControllerLED;
     ConnListenerSetAdaptiveTriggers setAdaptiveTriggers;
+
+    // Vibepollo extensions. New members are only ever appended, so the offsets of the members
+    // above never change. LiInitializeConnectionCallbacks() zeroes them.
+    ConnListenerControllerHaptics controllerHaptics;
 } CONNECTION_LISTENER_CALLBACKS, *PCONNECTION_LISTENER_CALLBACKS;
 
 // Use this function to zero the connection callbacks when allocated on the stack or heap
@@ -788,6 +804,8 @@ int LiSendMultiControllerEvent(short controllerNumber, short activeGamepadMask,
 #define LI_CCAP_BATTERY_STATE   0x40 // Reports battery state via LiSendControllerBatteryEvent()
 #define LI_CCAP_RGB_LED         0x80 // Can set RGB LED state via ConnListenerSetControllerLED()
 #define LI_CCAP_DUAL_TOUCHPAD  0x100 // Reports touchpad events from 2 separate touchpads
+// Vibepollo extension: plays haptic PCM via ConnListenerControllerHaptics(). Stripped unless that callback is set.
+#define LI_CCAP_HAPTICS_PCM   0x8000
 int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
                                  uint32_t supportedButtonFlags, uint16_t capabilities);
 

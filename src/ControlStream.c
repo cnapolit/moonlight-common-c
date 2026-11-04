@@ -1,4 +1,5 @@
 #include "Limelight-internal.h"
+#include "ControllerHaptics.h"
 
 // This is a private header, but it just contains some time macros
 #include <enet/time.h>
@@ -1490,8 +1491,14 @@ static void controlReceiveThreadFunc(void* context) {
                 hdrEnabled = (enableByte != 0);
             }
 
+            // Vibepollo extensions are only sent to clients that registered their callbacks.
+            // packetLength includes the header, which every receive path has already checked.
+            if (ctlHdr->type == ML_HAPTICS_PACKET_TYPE && ListenerCallbacks.controllerHaptics != NULL) {
+                MlHapticsDispatch((const uint8_t*)(ctlHdr + 1), (size_t)packetLength - sizeof(*ctlHdr),
+                                  ListenerCallbacks.controllerHaptics);
+            }
             // Process client callbacks in a separate thread
-            if (needsAsyncCallback(ctlHdr->type)) {
+            else if (needsAsyncCallback(ctlHdr->type)) {
                 queueAsyncCallback(ctlHdr, packetLength);
             }
             else if (ctlHdr->type == packetTypes[IDX_TERMINATION]) {
