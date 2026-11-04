@@ -903,8 +903,6 @@ static bool parseUrlAddrFromRtspUrlString(const char* rtspUrlString, char* desti
     return true;
 }
 
-// SDP attributes are in the form:
-// a=x-nv-bwe.bwuSafeZoneLowLimit:70\r\n
 // Copies a token-valued SDP attribute (up to whitespace) into val
 static bool parseSdpAttributeToToken(const char* payload, const char* name, char* val, size_t valSize) {
     const char* attribute = strstr(payload, name);
@@ -932,6 +930,8 @@ const char* LiGetHostPyroWaveBitstreamId(void) {
     return hostPyroWaveBitstreamId;
 }
 
+// SDP attributes are in the form:
+// a=x-nv-bwe.bwuSafeZoneLowLimit:70\r\n
 bool parseSdpAttributeToUInt(const char* payload, const char* name, uint32_t* val) {
     // Find the entry for the specified attribute name
     char* attribute = strstr(payload, name);

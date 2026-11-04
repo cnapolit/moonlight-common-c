@@ -592,7 +592,14 @@ static bool completeBlockWithLostPackets(PRTP_VIDEO_QUEUE queue, const char* rea
 
     for (entry = queue->pendingFecBlockList.head; entry != NULL; entry = entry->next) {
         if (!entry->isParity) {
-            present[U16(entry->packet->sequenceNumber - queue->bufferLowestSequenceNumber)] = true;
+            unsigned int index = U16(entry->packet->sequenceNumber - queue->bufferLowestSequenceNumber);
+            if (index >= queue->bufferDataPackets) {
+                // RtpvAddPacket() only queues data packets inside the block
+                LC_ASSERT(false);
+                free(present);
+                return false;
+            }
+            present[index] = true;
             reference = entry;
         }
     }

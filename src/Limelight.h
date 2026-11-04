@@ -1232,8 +1232,6 @@ bool LiGetHdrMetadata(PSS_HDR_METADATA metadata);
 // Valid after the RTSP handshake. This is a Sunshine protocol extension.
 const char* LiGetHostPyroWaveBitstreamId(void);
 
-
-
 // This function requests an IDR frame from the host. Typically this is done using DR_NEED_IDR, but clients
 // processing frames asynchronously may need to reset their decoder state even after returning DR_OK for
 // the prior frame. Rather than wait for a new frame and return DR_NEED_IDR for that one, they can just

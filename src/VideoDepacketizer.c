@@ -926,8 +926,8 @@ static void processRtpPayload(PNV_VIDEO_PACKET videoPacket, int length,
         // Vibeshine announces how many leading packets of a PyroWave frame hold its
         // coarsest wavelet level in the last two bytes of the short frame header
         pyrowaveCriticalPackets = 0;
-        if ((NegotiatedVideoFormat & VIDEO_FORMAT_MASK_PYROWAVE) && currentPos.data[currentPos.offset] == 0x01 &&
-                currentPos.length >= 8) {
+        if ((NegotiatedVideoFormat & VIDEO_FORMAT_MASK_PYROWAVE) && currentPos.length >= 8 &&
+                currentPos.data[currentPos.offset] == 0x01) {
             BYTE_BUFFER bb;
             BbInitializeWrappedBuffer(&bb, currentPos.data, currentPos.offset + 6, 2, BYTE_ORDER_LITTLE);
             BbGet16(&bb, &pyrowaveCriticalPackets);
