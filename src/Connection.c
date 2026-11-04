@@ -16,6 +16,10 @@ STREAM_CONFIGURATION StreamConfig;
 CONNECTION_LISTENER_CALLBACKS ListenerCallbacks;
 ConnListenerControllerSpeakerPcm ControllerSpeakerPcmCallback;
 static ConnListenerControllerSpeakerPcm pendingSpeakerPcmCallback;
+ConnListenerSteamHaptic SteamHapticCallback;
+ConnListenerSteamSettings SteamSettingsCallback;
+static ConnListenerSteamHaptic pendingSteamHapticCallback;
+static ConnListenerSteamSettings pendingSteamSettingsCallback;
 DECODER_RENDERER_CALLBACKS VideoCallbacks;
 AUDIO_RENDERER_CALLBACKS AudioCallbacks;
 int NegotiatedVideoFormat;
@@ -213,9 +217,14 @@ int LiStartConnection(PSERVER_INFORMATION serverInfo, PSTREAM_CONFIGURATION stre
     void* audioContext, int arFlags) {
     int err;
 
-    // Only LiStartConnectionWithSpeakerPcm() registers one, and only for the connection it starts
+    // Only LiStartConnectionWithSpeakerPcm() / LiStartConnectionWithSteamController() register these,
+    // and only for the connection they start
     ControllerSpeakerPcmCallback = pendingSpeakerPcmCallback;
     pendingSpeakerPcmCallback = NULL;
+    SteamHapticCallback = pendingSteamHapticCallback;
+    pendingSteamHapticCallback = NULL;
+    SteamSettingsCallback = pendingSteamSettingsCallback;
+    pendingSteamSettingsCallback = NULL;
 
     if (drCallbacks != NULL && (drCallbacks->capabilities & CAPABILITY_PULL_RENDERER) && drCallbacks->submitDecodeUnit) {
         Limelog("CAPABILITY_PULL_RENDERER cannot be set with a submitDecodeUnit callback\n");
@@ -560,6 +569,17 @@ int LiStartConnectionWithSpeakerPcm(PSERVER_INFORMATION serverInfo, PSTREAM_CONF
     pendingSpeakerPcmCallback = speakerPcmCallback;
     return LiStartConnection(serverInfo, streamConfig, clCallbacks, drCallbacks, arCallbacks, renderContext,
                              drFlags, audioContext, arFlags);
+}
+
+int LiStartConnectionWithSteamController(PSERVER_INFORMATION serverInfo, PSTREAM_CONFIGURATION streamConfig,
+    PCONNECTION_LISTENER_CALLBACKS clCallbacks, PDECODER_RENDERER_CALLBACKS drCallbacks,
+    PAUDIO_RENDERER_CALLBACKS arCallbacks, void* renderContext, int drFlags, void* audioContext, int arFlags,
+    ConnListenerControllerSpeakerPcm speakerPcmCallback, ConnListenerSteamHaptic steamHapticCallback,
+    ConnListenerSteamSettings steamSettingsCallback) {
+    pendingSteamHapticCallback = steamHapticCallback;
+    pendingSteamSettingsCallback = steamSettingsCallback;
+    return LiStartConnectionWithSpeakerPcm(serverInfo, streamConfig, clCallbacks, drCallbacks, arCallbacks,
+                                           renderContext, drFlags, audioContext, arFlags, speakerPcmCallback);
 }
 
 const char* LiGetLaunchUrlQueryParameters(void) {
