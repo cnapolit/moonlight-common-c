@@ -1,4 +1,5 @@
 #include "Limelight-internal.h"
+#include "ControllerSpeakerPcm.h"
 
 static SOCKET inputSock = INVALID_SOCKET;
 static unsigned char currentAesIv[16];
@@ -52,6 +53,9 @@ typedef struct _PACKET_HOLDER {
     LINKED_BLOCKING_QUEUE_ENTRY entry;
     uint32_t enetPacketFlags;
     uint8_t channelId;
+
+    // Vibepollo speaker owner sent as a binding right before a controller arrival (0 for none)
+    uint64_t speakerOwner;
 
     int relMouseDeltaX;
     int relMouseDeltaY;
@@ -642,6 +646,20 @@ static void inputSendThreadProc(void* context) {
 
             freePacketHolder(holder);
             continue;
+        }
+
+        // A speaker binding goes out right before its arrival, on the same reliable channel
+        if (holder->packet.header.magic == LE32(SS_CONTROLLER_ARRIVAL_MAGIC) && holder->speakerOwner != 0) {
+            PACKET_HOLDER binding;
+
+            binding.channelId = holder->channelId;
+            binding.enetPacketFlags = holder->enetPacketFlags;
+            MlSpeakerPcmBuildBinding((uint8_t*)&binding.packet, sizeof(binding.packet),
+                                     holder->packet.controllerArrival.controllerNumber, holder->speakerOwner);
+            if (!sendInputPacket(&binding, true)) {
+                freePacketHolder(holder);
+                return;
+            }
         }
 
         // Encrypt and send the input packet
@@ -1510,8 +1528,8 @@ int LiSendPenEvent(uint8_t eventType, uint8_t toolType, uint8_t penButtons,
     return err;
 }
 
-int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
-                                 uint32_t supportedButtonFlags, uint16_t capabilities) {
+static int sendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
+                                      uint32_t supportedButtonFlags, uint16_t capabilities, uint64_t speakerOwner) {
     PPACKET_HOLDER holder;
     int err;
 
@@ -1531,6 +1549,9 @@ int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepa
     if (ListenerCallbacks.controllerHaptics == NULL) {
         capabilities &= ~LI_CCAP_HAPTICS_PCM;
     }
+    if (type == LI_CTYPE_PS && speakerOwner == 0) {
+        capabilities &= ~LI_CCAP_PS_SPEAKER_PCM;
+    }
 
     // The arrival event is only supported by Sunshine
     if (IS_SUNSHINE()) {
@@ -1549,6 +1570,7 @@ int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepa
         holder->packet.controllerArrival.type = type;
         holder->packet.controllerArrival.capabilities = LE16(capabilities);
         holder->packet.controllerArrival.supportedButtonFlags = LE32(supportedButtonFlags);
+        holder->speakerOwner = speakerOwner;
 
         err = LbqOfferQueueItem(&packetQueue, holder, &holder->entry);
         if (err != LBQ_SUCCESS) {
@@ -1561,6 +1583,22 @@ int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepa
 
     // Send a MC event just in case the host software doesn't support arrival events.
     return LiSendMultiControllerEvent(controllerNumber, activeGamepadMask, 0, 0, 0, 0, 0, 0, 0);
+}
+
+int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
+                                 uint32_t supportedButtonFlags, uint16_t capabilities) {
+    return sendControllerArrivalEvent(controllerNumber, activeGamepadMask, type, supportedButtonFlags, capabilities, 0);
+}
+
+int LiSendControllerSpeakerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
+                                        uint32_t supportedButtonFlags, uint16_t capabilities, uint64_t speakerOwner) {
+    if (!IS_SUNSHINE() || ControllerSpeakerPcmCallback == NULL || type != LI_CTYPE_PS ||
+            !(capabilities & LI_CCAP_PS_SPEAKER_PCM)) {
+        speakerOwner = 0;
+    }
+
+    return sendControllerArrivalEvent(controllerNumber, activeGamepadMask, type, supportedButtonFlags, capabilities,
+                                      speakerOwner);
 }
 
 int LiSendControllerTouchEvent2(uint8_t controllerNumber, uint8_t eventType, uint8_t touchpadIndex, uint32_t pointerId, float x, float y, float pressure) {

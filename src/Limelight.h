@@ -495,6 +495,24 @@ typedef void(*ConnListenerSetControllerLED)(uint16_t controllerNumber, uint8_t r
 // of the callback, so copy it before returning.
 typedef void(*ConnListenerControllerHaptics)(uint16_t controllerNumber, uint32_t sequence, const uint8_t* pcm, uint16_t frames);
 
+// Vibepollo extension: audio for a PlayStation controller's speaker. `pcm` holds `frames` stereo frames of
+// 48 kHz S16LE samples (4 bytes per frame, at most 240 frames). `speakerOwner` is the token the client passed
+// to LiSendControllerSpeakerArrivalEvent() for this controller; drop audio for a token that is no longer
+// current (the controller was reallocated). `generation` is nonzero and changes when the host restarts the
+// stream for the controller; `samplePosition` counts stereo frames within a generation and `sequence`
+// increases per message. `flags` may carry ML_SPEAKER_PCM_FLAG_DISCONTINUITY: the host skipped audio.
+//
+// Registered with LiStartConnectionWithSpeakerPcm() rather than in CONNECTION_LISTENER_CALLBACKS. Registering
+// it makes the client advertise speaker support to the host; the host then sends audio only for controllers
+// announced with LiSendControllerSpeakerArrivalEvent(). Stock hosts never send these messages.
+//
+// Invoked on the control stream receive thread: it must not block. `pcm` is only valid for the duration
+// of the callback, so copy it before returning.
+#define ML_SPEAKER_PCM_FLAG_DISCONTINUITY 0x0001
+typedef void(*ConnListenerControllerSpeakerPcm)(uint16_t controllerNumber, uint64_t speakerOwner, uint32_t generation,
+                                                uint32_t sequence, uint64_t samplePosition, uint16_t flags,
+                                                const uint8_t* pcm, uint16_t frames);
+
 typedef struct _CONNECTION_LISTENER_CALLBACKS {
     ConnListenerStageStarting stageStarting;
     ConnListenerStageComplete stageComplete;
@@ -567,6 +585,14 @@ void LiInitializeServerInformation(PSERVER_INFORMATION serverInfo);
 int LiStartConnection(PSERVER_INFORMATION serverInfo, PSTREAM_CONFIGURATION streamConfig, PCONNECTION_LISTENER_CALLBACKS clCallbacks,
     PDECODER_RENDERER_CALLBACKS drCallbacks, PAUDIO_RENDERER_CALLBACKS arCallbacks, void* renderContext, int drFlags,
     void* audioContext, int arFlags);
+
+// Vibepollo extension: LiStartConnection() that also registers the controller speaker callback, which is passed
+// separately so CONNECTION_LISTENER_CALLBACKS keeps its layout. speakerPcmCallback may be NULL. A later plain
+// LiStartConnection() clears it.
+int LiStartConnectionWithSpeakerPcm(PSERVER_INFORMATION serverInfo, PSTREAM_CONFIGURATION streamConfig,
+    PCONNECTION_LISTENER_CALLBACKS clCallbacks, PDECODER_RENDERER_CALLBACKS drCallbacks,
+    PAUDIO_RENDERER_CALLBACKS arCallbacks, void* renderContext, int drFlags, void* audioContext, int arFlags,
+    ConnListenerControllerSpeakerPcm speakerPcmCallback);
 
 // This function stops streaming. This function is not thread-safe.
 void LiStopConnection(void);
@@ -806,8 +832,22 @@ int LiSendMultiControllerEvent(short controllerNumber, short activeGamepadMask,
 #define LI_CCAP_DUAL_TOUCHPAD  0x100 // Reports touchpad events from 2 separate touchpads
 // Vibepollo extension: plays haptic PCM via ConnListenerControllerHaptics(). Stripped unless that callback is set.
 #define LI_CCAP_HAPTICS_PCM   0x8000
+// Vibepollo extension: plays speaker audio via ConnListenerControllerSpeakerPcm(). Only meaningful on a LI_CTYPE_PS
+// arrival sent with LiSendControllerSpeakerArrivalEvent(); other arrivals of a PS controller have it stripped.
+// The bit is type-scoped: on a LI_CTYPE_STEAM arrival it means something else.
+#define LI_CCAP_PS_SPEAKER_PCM 0x4000
 int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
                                  uint32_t supportedButtonFlags, uint16_t capabilities);
+
+// Vibepollo extension: LiSendControllerArrivalEvent() for a controller whose speaker the client can play.
+// speakerOwner is a nonzero token the client chooses for this allocation of the controller (use a new one
+// each time the slot is reassigned); ConnListenerControllerSpeakerPcm() reports it back with the audio. The
+// binding is queued with the arrival, so the host sees them together or not at all. Speaker support is only
+// announced when the host is Sunshine-derived, a speaker callback is registered, type is LI_CTYPE_PS,
+// capabilities has LI_CCAP_PS_SPEAKER_PCM and speakerOwner is nonzero; otherwise this is a plain arrival event
+// without LI_CCAP_PS_SPEAKER_PCM.
+int LiSendControllerSpeakerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
+                                        uint32_t supportedButtonFlags, uint16_t capabilities, uint64_t speakerOwner);
 
 // This function is similar to LiSendTouchEvent(), but the touch events are associated with a
 // touchpad device present on a game controller instead of a touchscreen.

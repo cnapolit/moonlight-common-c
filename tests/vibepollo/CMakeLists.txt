@@ -22,3 +22,4 @@ endfunction()
 
 vibepollo_test(test_callbacks_layout)
 vibepollo_test(test_controller_haptics)
+vibepollo_test(test_controller_speaker)
