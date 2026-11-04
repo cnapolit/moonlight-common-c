@@ -1,5 +1,6 @@
 #include "Limelight-internal.h"
 #include "ControllerHaptics.h"
+#include "ControllerSpeakerPcm.h"
 
 // This is a private header, but it just contains some time macros
 #include <enet/time.h>
@@ -1496,6 +1497,10 @@ static void controlReceiveThreadFunc(void* context) {
             if (ctlHdr->type == ML_HAPTICS_PACKET_TYPE && ListenerCallbacks.controllerHaptics != NULL) {
                 MlHapticsDispatch((const uint8_t*)(ctlHdr + 1), (size_t)packetLength - sizeof(*ctlHdr),
                                   ListenerCallbacks.controllerHaptics);
+            }
+            else if (ctlHdr->type == ML_SPEAKER_PCM_PACKET_TYPE && ControllerSpeakerPcmCallback != NULL) {
+                MlSpeakerPcmDispatch((const uint8_t*)(ctlHdr + 1), (size_t)packetLength - sizeof(*ctlHdr),
+                                     ControllerSpeakerPcmCallback);
             }
             // Process client callbacks in a separate thread
             else if (needsAsyncCallback(ctlHdr->type)) {

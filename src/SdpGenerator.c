@@ -273,6 +273,9 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
         if (ListenerCallbacks.controllerHaptics != NULL) {
             moonlightFeatureFlags |= ML_FF_HAPTICS_PCM;
         }
+        if (ControllerSpeakerPcmCallback != NULL) {
+            moonlightFeatureFlags |= ML_FF_CONTROLLER_SPEAKER_PCM;
+        }
         snprintf(payloadStr, sizeof(payloadStr), "%" PRIu32, moonlightFeatureFlags);
         err |= addAttributeString(&optionHead, "x-ml-general.featureFlags", payloadStr);
 
