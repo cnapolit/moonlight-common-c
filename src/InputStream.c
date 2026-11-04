@@ -1527,6 +1527,11 @@ int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepa
         capabilities |= LI_CCAP_TOUCHPAD;
     }
 
+    // Never promise the host a Vibepollo feature the client did not register for
+    if (ListenerCallbacks.controllerHaptics == NULL) {
+        capabilities &= ~LI_CCAP_HAPTICS_PCM;
+    }
+
     // The arrival event is only supported by Sunshine
     if (IS_SUNSHINE()) {
         holder = allocatePacketHolder(0);

@@ -1,0 +1,42 @@
+name: Vibepollo extensions
+
+# Tests of the Vibepollo protocol extensions this fork carries (tests/vibepollo).
+# Kept apart from upstream's ci.yml so the weekly rebase never conflicts on it.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cc: gcc
+          - cc: clang
+          - cc: gcc
+            cmake_args: -DUSE_MBEDTLS=ON
+            prebuild_cmd: sudo apt-get install -y libmbedtls-dev
+    runs-on: ubuntu-latest
+    name: Test (${{ matrix.cc }} ${{ matrix.cmake_args }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Prebuild
+        if: matrix.prebuild_cmd
+        run: ${{ matrix.prebuild_cmd }}
+
+      - name: Build
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          cmake ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all" \
+            -B build-tests -S tests/vibepollo
+          cmake --build build-tests
+
+      - name: Test
+        run: ctest --test-dir build-tests --output-on-failure
